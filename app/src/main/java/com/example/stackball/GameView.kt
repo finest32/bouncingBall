@@ -300,3 +300,7 @@ data class Platform(
     val height: Float,
     val color: Int
 )
+
+class GameView {
+
+}
