@@ -29,6 +29,7 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
 
     // Параметры для очков
     private var score = 0
+    private var bestScore = 0 // Добавление переменной для хранения лучшего результата
     private val scorePaint = Paint().apply {
         color = Color.BLACK
         textSize = 70f
@@ -42,6 +43,22 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         setShadowLayer(5f, 0f, 0f, Color.BLACK)
     }
 
+    private val bestScorePaint = Paint().apply {
+        color = Color.BLACK
+        textSize = 70f
+        textAlign = Paint.Align.CENTER
+        isAntiAlias = true // Добавлено сглаживание текста
+    }
+
+    private val bestScoreShadowPaint = Paint().apply {
+        color = Color.GRAY
+        textSize = 70f
+        textAlign = Paint.Align.CENTER
+        setShadowLayer(5f, 0f, 0f, Color.BLACK)
+        isAntiAlias = true // Добавлено сглаживание текста
+    }
+
+
     private val handler = Handler(Looper.getMainLooper())
     private var jumpEnabled = true
 
@@ -53,6 +70,7 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         holder.addCallback(this)
         setupBallPaint()
         setupShadowPaint()
+        loadBestScore() // Загрузка лучшего результата при инициализации
     }
 
     private fun setupBallPaint() {
@@ -121,7 +139,7 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
                     if (platform.isBreakable) {
                         destroyedPlatforms.add(platform)
                     } else {
-                        resetGame()
+                        handleGameOver() // Обработка проигрыша
                         return
                     }
                 } else if (!jumpEnabled) {
@@ -155,7 +173,7 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
 
     // Проверка близости шарика к платформе и смена цвета, если шарик близко
     private fun checkBallProximityAndTriggerChange(platform: Platform) {
-        val proximityThreshold = 300f // расстояние, при котором шарик считается "близко" к платформе
+        val proximityThreshold = 250f // расстояние, при котором шарик считается "близко" к платформе
 
         // Проверяем, находится ли шарик в пределах proximityThreshold от платформы
         if (Math.abs(ballY - platform.y) <= proximityThreshold) {
@@ -174,19 +192,64 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         }
     }
 
-    private fun nextLevel() {
-        level++
+    private fun saveLevel() {
+        val sharedPref = context.getSharedPreferences("game_data", Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putInt("level", level)
+            apply()
+        }
+    }
+
+    private fun loadLevel() {
+        val sharedPref = context.getSharedPreferences("game_data", Context.MODE_PRIVATE)
+        level = sharedPref.getInt("level", 1) // Если данных нет, начинаем с 1 уровня
+    }
+
+    private fun loadBestScore() {
+        val sharedPref = context.getSharedPreferences("game_data", Context.MODE_PRIVATE)
+        bestScore = sharedPref.getInt("best_score", 0) // Загрузка лучшего результата
+    }
+
+    private fun saveBestScore() {
+        val sharedPref = context.getSharedPreferences("game_data", Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putInt("best_score", bestScore) // Сохранение лучшего результата
+            apply()
+        }
+    }
+
+    private fun handleGameOver() {
+        // Сохраняем лучший результат, если текущий больше
+        if (score > bestScore) {
+            bestScore = score
+            saveBestScore()
+        }
+        // Вместо сброса уровня на 1, оставляем уровень, на котором проиграли
         ballY = 0f
         ballSpeed = 0f
+        score = 0
         currentLevelProgress = 0
         setupPlatforms()
     }
 
+
+    // Метод для сброса игры
     private fun resetGame() {
-        level = 1
+        loadLevel()
+        // Устанавливаем текущее значение уровня на последний проигранный
         ballY = 0f
         ballSpeed = 0f
         score = 0
+        currentLevelProgress = 0
+        setupPlatforms()
+    }
+
+
+    private fun nextLevel() {
+        saveLevel()
+        level++
+        ballY = 0f
+        ballSpeed = 0f
         currentLevelProgress = 0
         setupPlatforms()
     }
@@ -227,6 +290,7 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
 
         drawLevelProgressBar(canvas)
         drawScore(canvas)
+        drawBestScore(canvas) // Вызов функции для отрисовки лучшего результата
     }
 
     private fun drawPlatform(canvas: Canvas, platform: Platform) {
@@ -237,8 +301,14 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
     }
 
     private fun drawScore(canvas: Canvas) {
-        canvas.drawText("Score: $score", width / 2f, 250f, scoreShadowPaint)
-        canvas.drawText("Score: $score", width / 2f, 250f, scorePaint)
+        canvas.drawText("Score: $score", width / 2f, 200f, scoreShadowPaint)
+        canvas.drawText("Score: $score", width / 2f, 200f, scorePaint)
+    }
+
+    private fun drawBestScore(canvas: Canvas) {
+        // Отрисовка текста для лучшего результата
+        canvas.drawText("Best score: $bestScore", width / 2f, 300f, bestScoreShadowPaint)
+        canvas.drawText("Best score: $bestScore", width / 2f, 300f, bestScorePaint)
     }
 
     private fun drawLevelProgressBar(canvas: Canvas) {
@@ -272,9 +342,10 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
 
         val textPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 60f // Увеличиваем шрифт
+            textSize = 60f // Размер шрифта
             textAlign = Paint.Align.CENTER
             setShadowLayer(5f, 0f, 0f, Color.BLACK) // Добавляем тень
+            isAntiAlias = true
         }
 
         // Рисуем круги для уровней
@@ -289,8 +360,6 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         canvas.drawText("$level", circleX1, textY1, textPaint) // Текущий уровень
         canvas.drawText("${level + 1}", circleX2, textY2, textPaint) // Следующий уровень
     }
-
-
 
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         when (event?.action) {
