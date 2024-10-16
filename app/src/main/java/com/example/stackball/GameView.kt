@@ -17,7 +17,7 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
 
     // Параметры для шарика
     private var ballY = 0f
-    private var ballSpeed = 0f // Скорость шарика
+    private var ballSpeed = 0f
     private val ballRadius = 50f
     private val ballPaint = Paint()
     private val ballShadowPaint = Paint()
@@ -25,7 +25,7 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
     // Параметры для платформ
     private val platforms = mutableListOf<Platform>()
     private var level = 1
-    private val maxLevel = 10 // Максимальный уровень
+    private val maxLevel = 10
 
     // Параметры для очков
     private var score = 0
@@ -35,7 +35,6 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         textAlign = Paint.Align.CENTER
     }
 
-    // Paint для тени текста
     private val scoreShadowPaint = Paint().apply {
         color = Color.GRAY
         textSize = 70f
@@ -43,17 +42,13 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         setShadowLayer(5f, 0f, 0f, Color.BLACK)
     }
 
-    // Handler для запуска таймеров
     private val handler = Handler(Looper.getMainLooper())
-
-    // Флаг для отслеживания состояния прыжков
     private var jumpEnabled = true
 
     // Прогресс уровня
-    private var currentLevelProgress = 0 // Прогресс в текущем уровне (в процентах)
-    private val maxLevelProgress = 100 // Максимальный прогресс для уровня (100%)
+    private var currentLevelProgress = 0
+    private val maxLevelProgress = 100
 
-    // Инициализация
     init {
         holder.addCallback(this)
         setupBallPaint()
@@ -61,23 +56,22 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
     }
 
     private fun setupBallPaint() {
-        // Устанавливаем градиент для красного шарика
         val gradient = RadialGradient(
             ballRadius, ballRadius, ballRadius,
-            Color.parseColor("#FF0000"), // Красный цвет
-            Color.parseColor("#FF7F7F"), // Светло-красный для градиента
+            Color.parseColor("#FF0000"),
+            Color.parseColor("#FF7F7F"),
             Shader.TileMode.CLAMP
         )
         ballPaint.shader = gradient
     }
 
     private fun setupShadowPaint() {
-        ballShadowPaint.color = Color.parseColor("#80000000") // Полупрозрачный черный для тени
-        ballShadowPaint.maskFilter = BlurMaskFilter(10f, BlurMaskFilter.Blur.NORMAL) // Размытие для тени
+        ballShadowPaint.color = Color.parseColor("#80000000")
+        ballShadowPaint.maskFilter = BlurMaskFilter(10f, BlurMaskFilter.Blur.NORMAL)
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        resetGame() // Сброс игры при создании поверхности
+        resetGame()
         running = true
         gameThread = Thread(this)
         gameThread?.start()
@@ -98,7 +92,6 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         }
     }
 
-    // Основной игровой цикл
     override fun run() {
         while (running) {
             if (holder.surface.isValid) {
@@ -113,68 +106,91 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
     }
 
     private fun updateGame() {
-        // Двигаем шарик вниз с заданной скоростью
         ballY += ballSpeed
-        ballSpeed += 1.5f // Увеличиваем скорость падения
+        ballSpeed += 1.5f
 
-        // Обновляем текущий прогресс уровня
         if (ballY > 0) {
             currentLevelProgress = ((ballY / (height - ballRadius)) * maxLevelProgress).toInt()
         }
 
-        // Проверка на столкновение с платформами
-        val destroyedPlatforms = mutableListOf<Platform>() // Список разрушенных платформ
-        for (platform in platforms) {
+        val destroyedPlatforms = mutableListOf<Platform>()
+        for (i in platforms.indices) {
+            val platform = platforms[i]
             if (ballY + ballRadius > platform.y && ballY - ballRadius < platform.y + platform.height) {
-                if (!jumpEnabled) { // Если прыжки отключены
-                    destroyedPlatforms.add(platform) // Добавляем платформу в список разрушенных
+                if (platform.isBlack) {
+                    if (platform.isBreakable) {
+                        destroyedPlatforms.add(platform)
+                    } else {
+                        resetGame()
+                        return
+                    }
+                } else if (!jumpEnabled) {
+                    destroyedPlatforms.add(platform)
                 } else {
-                    // Изменяем направление скорости шарика при столкновении
-                    ballSpeed = -15f // Устанавливаем скорость вверх при столкновении
-                    // Корректируем положение шарика, чтобы он не проваливался сквозь платформу
+                    ballSpeed = -15f
                     ballY = platform.y - ballRadius
-                    break // Выходим из цикла, чтобы не обрабатывать дальше
+                    break
                 }
+            }
+
+            // Применяем изменение цвета только при приближении шарика к черной платформе
+            if (platform.isBlack && !platform.isBreakable) {
+                checkBallProximityAndTriggerChange(platform)
             }
         }
 
-        // Удаляем разрушенные платформы и увеличиваем счёт
         for (platform in destroyedPlatforms) {
             platforms.remove(platform)
-            score += 10 // Увеличиваем счёт на 10 за каждую разбитую платформу
+            score += 10
         }
 
-        // Если шарик достиг нижней границы экрана, начинается новый уровень
         if (ballY - ballRadius > height) {
-            nextLevel() // Переход на новый уровень
+            nextLevel()
         }
 
-        // Если прыжки включены, то поднимаем шарик на 2 см
         if (jumpEnabled && ballY + ballRadius < height && ballSpeed >= 0) {
-            ballY -= 2f // Подлетаем на 2 см
+            ballY -= 2f
         }
     }
 
-    // Переход на новый уровень
+    // Проверка близости шарика к платформе и смена цвета, если шарик близко
+    private fun checkBallProximityAndTriggerChange(platform: Platform) {
+        val proximityThreshold = 300f // расстояние, при котором шарик считается "близко" к платформе
+
+        // Проверяем, находится ли шарик в пределах proximityThreshold от платформы
+        if (Math.abs(ballY - platform.y) <= proximityThreshold) {
+            triggerBlackPlatformChange(platform)
+        }
+    }
+
+    // Функция для изменения цвета черной платформы на желтый через 1-4 секунды
+    private fun triggerBlackPlatformChange(blackPlatform: Platform) {
+        if (!blackPlatform.isBreakable) {
+            val delay = Random.nextLong(1000, 4000) // Задержка от 1 до 4 секунд
+            handler.postDelayed({
+                blackPlatform.color = Color.YELLOW // Изменяем цвет на желтый
+                blackPlatform.isBreakable = true // Делаем платформу разрушаемой
+            }, delay)
+        }
+    }
+
     private fun nextLevel() {
         level++
         ballY = 0f
-        ballSpeed = 0f // Сбрасываем скорость при переходе на новый уровень
-        currentLevelProgress = 0 // Сбрасываем прогресс уровня
+        ballSpeed = 0f
+        currentLevelProgress = 0
         setupPlatforms()
     }
 
-    // Сброс игры
     private fun resetGame() {
         level = 1
         ballY = 0f
         ballSpeed = 0f
         score = 0
-        currentLevelProgress = 0 // Сброс прогресса уровня
+        currentLevelProgress = 0
         setupPlatforms()
     }
 
-    // Метод для установки платформ
     private fun setupPlatforms() {
         platforms.clear()
         val platformHeight = 50f
@@ -183,31 +199,26 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         val numberOfPlatforms = (availableHeight / (platformHeight + spacing)).toInt()
 
         val startY = 400f
-        var yellowCount = 0 // Счетчик желтых платформ
+        var yellowCount = 0
 
         for (i in 0 until numberOfPlatforms) {
             val isBlack = if (yellowCount >= 3 && Random.nextInt(0, 4) == 0) {
-                yellowCount = 0 // Сбрасываем счетчик после добавления черной платформы
+                yellowCount = 0
                 true
             } else {
                 false
             }
 
-            // Изменено с Color.YELLOW на Color.parseColor("#800080") для фиолетового
-            val color = if (isBlack) Color.BLACK else Color.parseColor("#800080") // Фиолетовый цвет
-            platforms.add(Platform(0f, startY + i * (platformHeight + spacing), width.toFloat(), platformHeight, color, isBlack))
+            val color = if (isBlack) Color.BLACK else Color.parseColor("#FFC107")
+            platforms.add(Platform(0f, startY + i * (platformHeight + spacing), width.toFloat(), platformHeight, color, isBlack, isBreakable = false))
 
-            if (!isBlack) yellowCount++ // Увеличиваем счетчик, если платформа фиолетовая
+            if (!isBlack) yellowCount++
         }
     }
 
-    // Рисование игры
     private fun drawGame(canvas: Canvas) {
         canvas.drawColor(Color.WHITE)
-
-        // Рисуем тень шарика
-        canvas.drawCircle(width / 2f, ballY + 10, ballRadius, ballShadowPaint) // Тень чуть ниже шарика
-        // Рисуем шарик
+        canvas.drawCircle(width / 2f, ballY + 10, ballRadius, ballShadowPaint)
         canvas.drawCircle(width / 2f, ballY, ballRadius, ballPaint)
 
         for (platform in platforms) {
@@ -218,7 +229,6 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         drawScore(canvas)
     }
 
-    // Рисуем платформу
     private fun drawPlatform(canvas: Canvas, platform: Platform) {
         val paint = Paint().apply {
             color = platform.color
@@ -226,14 +236,11 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         canvas.drawRect(platform.x, platform.y, platform.x + platform.width, platform.y + platform.height, paint)
     }
 
-    // Рисуем очки
     private fun drawScore(canvas: Canvas) {
-        // Отображаем текст "Score"
-        canvas.drawText("Score: $score", width / 2f, 250f, scoreShadowPaint) // Добавили тень к тексту
-        canvas.drawText("Score: $score", width / 2f, 250f, scorePaint) // Основной текст
+        canvas.drawText("Score: $score", width / 2f, 250f, scoreShadowPaint)
+        canvas.drawText("Score: $score", width / 2f, 250f, scorePaint)
     }
 
-    // Рисуем полоску прогресса
     private fun drawLevelProgressBar(canvas: Canvas) {
         val progressBarHeight = 50f
         val margin = 50f
@@ -244,7 +251,6 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         }
         canvas.drawRect(progressBarRect, progressPaint)
 
-        // Вычисляем ширину прогресса на основе текущего уровня и прогресса уровня
         val progressWidth = (width - margin * 2) * currentLevelProgress / maxLevelProgress
         val progressRect = RectF(margin, margin, margin + progressWidth, margin + progressBarHeight)
         progressPaint.color = Color.CYAN
@@ -253,47 +259,53 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         drawLevelCircles(canvas)
     }
 
-    // Рисуем круги уровней
     private fun drawLevelCircles(canvas: Canvas) {
         val circleRadius = 40f
         val circleX1 = 150f
         val circleX2 = width - 150f
         val circleY = 75f
 
-        // Изменяем цвет на почти черный, но слегка сероватый
+        // Изменяем цвет на темно-серый, ближе к черному
         val circlePaint = Paint().apply {
-            color = Color.parseColor("#3A3A3A") // Цвет: почти черный (серый)
+            color = Color.parseColor("#333333") // Темно-серый, ближе к черному
         }
-        canvas.drawCircle(circleX1, circleY, circleRadius, circlePaint)
-        canvas.drawCircle(circleX2, circleY, circleRadius, circlePaint)
 
         val textPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 60f
+            textSize = 60f // Увеличиваем шрифт
             textAlign = Paint.Align.CENTER
+            setShadowLayer(5f, 0f, 0f, Color.BLACK) // Добавляем тень
         }
-        canvas.drawText(level.toString(), circleX1, circleY + 20, textPaint)
-        canvas.drawText((level + 1).toString(), circleX2, circleY + 20, textPaint)
+
+        // Рисуем круги для уровней
+        canvas.drawCircle(circleX1, circleY, circleRadius, circlePaint)
+        canvas.drawCircle(circleX2, circleY, circleRadius, circlePaint)
+
+        // Вычисляем Y-координату для выравнивания текста по центру
+        val textY1 = circleY - (textPaint.descent() + textPaint.ascent()) / 2
+        val textY2 = circleY - (textPaint.descent() + textPaint.ascent()) / 2
+
+        // Отображаем текущий уровень слева и следующий уровень справа
+        canvas.drawText("$level", circleX1, textY1, textPaint) // Текущий уровень
+        canvas.drawText("${level + 1}", circleX2, textY2, textPaint) // Следующий уровень
     }
 
-    // Обрабатываем касания
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.action) {
+
+
+    override fun onTouchEvent(event: MotionEvent?): Boolean {
+        when (event?.action) {
             MotionEvent.ACTION_DOWN -> {
-                // Отключаем прыжки и устанавливаем скорость вниз
                 jumpEnabled = false
-                ballSpeed = 30f // Устанавливаем скорость падения
+                ballSpeed = 30f
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                // Включаем прыжки
                 jumpEnabled = true
-                ballSpeed = 15f // Устанавливаем скорость для прыжка
+                ballSpeed = 15f
             }
         }
         return super.onTouchEvent(event)
     }
 
-    // Класс для платформ
-    data class Platform(val x: Float, val y: Float, val width: Float, val height: Float, val color: Int, val isBlack: Boolean)
+    data class Platform(val x: Float, val y: Float, val width: Float, val height: Float, var color: Int, val isBlack: Boolean, var isBreakable: Boolean)
 }
