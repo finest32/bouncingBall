@@ -2,40 +2,78 @@ package com.example.stackball
 
 import android.content.Context
 import android.graphics.*
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import kotlin.random.Random
 
-class пGameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(context, attrs), SurfaceHolder.Callback, Runnable {
+class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(context, attrs), SurfaceHolder.Callback, Runnable {
 
     private var gameThread: Thread? = null
     private var running = false
 
     // Параметры для шарика
     private var ballY = 0f
-    private var ballSpeed = 0f // Шарик не движется, пока не коснемся экрана
+    private var ballSpeed = 0f // Скорость шарика
     private val ballRadius = 50f
-    private val ballPaint = Paint().apply {
-        color = Color.RED
-    }
+    private val ballPaint = Paint()
+    private val ballShadowPaint = Paint()
 
     // Параметры для платформ
     private val platforms = mutableListOf<Platform>()
     private var level = 1
-    private var screenOffsetY = 0f // Смещение экрана по оси Y для прокрутки
-    private var allowScreenScroll = true // Управляет прокруткой экрана
+    private val maxLevel = 10 // Максимальный уровень
 
-    // Параметры черного сегмента
-    private var blackAreaPosition = 0f // Начальная позиция черного сегмента
-    private var blackAreaDirection = 1 // Направление движения черного сегмента
-    private val blackPaint = Paint().apply {
+    // Параметры для очков
+    private var score = 0
+    private val scorePaint = Paint().apply {
         color = Color.BLACK
+        textSize = 70f
+        textAlign = Paint.Align.CENTER
     }
+
+    // Paint для тени текста
+    private val scoreShadowPaint = Paint().apply {
+        color = Color.GRAY
+        textSize = 70f
+        textAlign = Paint.Align.CENTER
+        setShadowLayer(5f, 0f, 0f, Color.BLACK)
+    }
+
+    // Handler для запуска таймеров
+    private val handler = Handler(Looper.getMainLooper())
+
+    // Флаг для отслеживания состояния прыжков
+    private var jumpEnabled = true
+
+    // Прогресс уровня
+    private var currentLevelProgress = 0 // Прогресс в текущем уровне (в процентах)
+    private val maxLevelProgress = 100 // Максимальный прогресс для уровня (100%)
 
     // Инициализация
     init {
         holder.addCallback(this)
+        setupBallPaint()
+        setupShadowPaint()
+    }
+
+    private fun setupBallPaint() {
+        // Устанавливаем градиент для красного шарика
+        val gradient = RadialGradient(
+            ballRadius, ballRadius, ballRadius,
+            Color.parseColor("#FF0000"), // Красный цвет
+            Color.parseColor("#FF7F7F"), // Светло-красный для градиента
+            Shader.TileMode.CLAMP
+        )
+        ballPaint.shader = gradient
+    }
+
+    private fun setupShadowPaint() {
+        ballShadowPaint.color = Color.parseColor("#80000000") // Полупрозрачный черный для тени
+        ballShadowPaint.maskFilter = BlurMaskFilter(10f, BlurMaskFilter.Blur.NORMAL) // Размытие для тени
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -74,20 +112,36 @@ class пGameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(co
         }
     }
 
-    // Обновление логики игры
     private fun updateGame() {
-        // Двигаем шарик только если есть скорость (при касании)
+        // Двигаем шарик вниз с заданной скоростью
         ballY += ballSpeed
+        ballSpeed += 1.5f // Увеличиваем скорость падения
 
-        // Прокрутка экрана вниз вместе с шариком, пока он не на последней платформе
-        if (allowScreenScroll && ballY > height / 2) {
-            screenOffsetY = ballY - height / 2
+        // Обновляем текущий прогресс уровня
+        if (ballY > 0) {
+            currentLevelProgress = ((ballY / (height - ballRadius)) * maxLevelProgress).toInt()
         }
 
-        // Если шарик достиг нижней границы экрана и последняя платформа пройдена, даём ему упасть до конца экрана
-        val lastPlatform = platforms.lastOrNull()
-        if (lastPlatform != null && ballY - ballRadius > lastPlatform.y + lastPlatform.height) {
-            allowScreenScroll = false // Останавливаем прокрутку экрана
+        // Проверка на столкновение с платформами
+        val destroyedPlatforms = mutableListOf<Platform>() // Список разрушенных платформ
+        for (platform in platforms) {
+            if (ballY + ballRadius > platform.y && ballY - ballRadius < platform.y + platform.height) {
+                if (!jumpEnabled) { // Если прыжки отключены
+                    destroyedPlatforms.add(platform) // Добавляем платформу в список разрушенных
+                } else {
+                    // Изменяем направление скорости шарика при столкновении
+                    ballSpeed = -15f // Устанавливаем скорость вверх при столкновении
+                    // Корректируем положение шарика, чтобы он не проваливался сквозь платформу
+                    ballY = platform.y - ballRadius
+                    break // Выходим из цикла, чтобы не обрабатывать дальше
+                }
+            }
+        }
+
+        // Удаляем разрушенные платформы и увеличиваем счёт
+        for (platform in destroyedPlatforms) {
+            platforms.remove(platform)
+            score += 10 // Увеличиваем счёт на 10 за каждую разбитую платформу
         }
 
         // Если шарик достиг нижней границы экрана, начинается новый уровень
@@ -95,212 +149,151 @@ class пGameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(co
             nextLevel() // Переход на новый уровень
         }
 
-        // Проверка на столкновение с платформами
-        for (platform in platforms) {
-            if (ballY + ballRadius > platform.y && ballY - ballRadius < platform.y + platform.height) {
-                if (ballSpeed > 0) {
-                    // Удаляем платформу при столкновении
-                    platforms.remove(platform)
-                    break
-                }
-            }
+        // Если прыжки включены, то поднимаем шарик на 2 см
+        if (jumpEnabled && ballY + ballRadius < height && ballSpeed >= 0) {
+            ballY -= 2f // Подлетаем на 2 см
         }
     }
 
     // Переход на новый уровень
     private fun nextLevel() {
-        level++ // Увеличиваем уровень
-        ballY = 160f // Возвращаем шарик в начальную позицию ниже полоски с прогрессом
-        screenOffsetY = 0f // Сбрасываем смещение экрана
-        allowScreenScroll = true // Разрешаем прокрутку экрана снова
-        setupPlatforms() // Генерируем новые платформы для следующего уровня
+        level++
+        ballY = 0f
+        ballSpeed = 0f // Сбрасываем скорость при переходе на новый уровень
+        currentLevelProgress = 0 // Сбрасываем прогресс уровня
+        setupPlatforms()
     }
 
     // Сброс игры
     private fun resetGame() {
-        level = 1 // Сбрасываем уровень
-        ballY = 160f // Устанавливаем начальную позицию шарика ниже полоски с прогрессом
-        ballSpeed = 0f // Обнуляем скорость
-        screenOffsetY = 0f // Сбрасываем смещение экрана
-        allowScreenScroll = true // Разрешаем прокрутку экрана
-        setupPlatforms() // Генерируем платформы для первого уровня
+        level = 1
+        ballY = 0f
+        ballSpeed = 0f
+        score = 0
+        currentLevelProgress = 0 // Сброс прогресса уровня
+        setupPlatforms()
+    }
+
+    // Метод для установки платформ
+    private fun setupPlatforms() {
+        platforms.clear()
+        val platformHeight = 50f
+        val spacing = 30f
+        val availableHeight = height - 400f
+        val numberOfPlatforms = (availableHeight / (platformHeight + spacing)).toInt()
+
+        val startY = 400f
+        var yellowCount = 0 // Счетчик желтых платформ
+
+        for (i in 0 until numberOfPlatforms) {
+            val isBlack = if (yellowCount >= 3 && Random.nextInt(0, 4) == 0) {
+                yellowCount = 0 // Сбрасываем счетчик после добавления черной платформы
+                true
+            } else {
+                false
+            }
+
+            // Изменено с Color.YELLOW на Color.parseColor("#800080") для фиолетового
+            val color = if (isBlack) Color.BLACK else Color.parseColor("#800080") // Фиолетовый цвет
+            platforms.add(Platform(0f, startY + i * (platformHeight + spacing), width.toFloat(), platformHeight, color, isBlack))
+
+            if (!isBlack) yellowCount++ // Увеличиваем счетчик, если платформа фиолетовая
+        }
     }
 
     // Рисование игры
     private fun drawGame(canvas: Canvas) {
         canvas.drawColor(Color.WHITE)
 
-        // Применяем смещение экрана по Y, если разрешена прокрутка
-        if (allowScreenScroll) {
-            canvas.translate(0f, -screenOffsetY)
-        }
-
+        // Рисуем тень шарика
+        canvas.drawCircle(width / 2f, ballY + 10, ballRadius, ballShadowPaint) // Тень чуть ниже шарика
         // Рисуем шарик
         canvas.drawCircle(width / 2f, ballY, ballRadius, ballPaint)
 
-        // Рисуем платформы
-        for (i in platforms.indices) {
-            draw3DPlatform(canvas, platforms[i], i)
+        for (platform in platforms) {
+            drawPlatform(canvas, platform)
         }
 
-        // Возвращаем экран в исходное положение после рисования
-        if (allowScreenScroll) {
-            canvas.translate(0f, screenOffsetY)
-        }
-
-        // Рисуем полоску прогресса уровня — всегда наверху экрана
         drawLevelProgressBar(canvas)
+        drawScore(canvas)
     }
 
-    // Обрабатываем касания для движения шарика
+    // Рисуем платформу
+    private fun drawPlatform(canvas: Canvas, platform: Platform) {
+        val paint = Paint().apply {
+            color = platform.color
+        }
+        canvas.drawRect(platform.x, platform.y, platform.x + platform.width, platform.y + platform.height, paint)
+    }
+
+    // Рисуем очки
+    private fun drawScore(canvas: Canvas) {
+        // Отображаем текст "Score"
+        canvas.drawText("Score: $score", width / 2f, 250f, scoreShadowPaint) // Добавили тень к тексту
+        canvas.drawText("Score: $score", width / 2f, 250f, scorePaint) // Основной текст
+    }
+
+    // Рисуем полоску прогресса
+    private fun drawLevelProgressBar(canvas: Canvas) {
+        val progressBarHeight = 50f
+        val margin = 50f
+
+        val progressBarRect = RectF(margin, margin, width - margin, margin + progressBarHeight)
+        val progressPaint = Paint().apply {
+            color = Color.LTGRAY
+        }
+        canvas.drawRect(progressBarRect, progressPaint)
+
+        // Вычисляем ширину прогресса на основе текущего уровня и прогресса уровня
+        val progressWidth = (width - margin * 2) * currentLevelProgress / maxLevelProgress
+        val progressRect = RectF(margin, margin, margin + progressWidth, margin + progressBarHeight)
+        progressPaint.color = Color.CYAN
+        canvas.drawRect(progressRect, progressPaint)
+
+        drawLevelCircles(canvas)
+    }
+
+    // Рисуем круги уровней
+    private fun drawLevelCircles(canvas: Canvas) {
+        val circleRadius = 40f
+        val circleX1 = 150f
+        val circleX2 = width - 150f
+        val circleY = 75f
+
+        // Изменяем цвет на почти черный, но слегка сероватый
+        val circlePaint = Paint().apply {
+            color = Color.parseColor("#3A3A3A") // Цвет: почти черный (серый)
+        }
+        canvas.drawCircle(circleX1, circleY, circleRadius, circlePaint)
+        canvas.drawCircle(circleX2, circleY, circleRadius, circlePaint)
+
+        val textPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 60f
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(level.toString(), circleX1, circleY + 20, textPaint)
+        canvas.drawText((level + 1).toString(), circleX2, circleY + 20, textPaint)
+    }
+
+    // Обрабатываем касания
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                ballSpeed = 30f // Устанавливаем скорость при касании экрана
+                // Отключаем прыжки и устанавливаем скорость вниз
+                jumpEnabled = false
+                ballSpeed = 30f // Устанавливаем скорость падения
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                ballSpeed = 0f // Останавливаем шарик при отпускании экрана
+                // Включаем прыжки
+                jumpEnabled = true
+                ballSpeed = 15f // Устанавливаем скорость для прыжка
             }
         }
         return super.onTouchEvent(event)
     }
 
-    // Метод для создания платформ
-    private fun setupPlatforms() {
-        platforms.clear()
-        val platformHeight = 100f // Высота платформы
-        val platformSpacing = 50f // Расстояние между платформами
-        val numberOfPlatforms = 20 // Количество платформ на уровне
-
-        // Рассчитываем ширину платформы
-        val fullWidth = width.toFloat()
-        val platformWidth = fullWidth * 0.8f // Платформы занимают 80% ширины экрана
-
-        // Задаем фиксированную Y-координату для появления платформ
-        val platformStartY = 300f // Начальная Y-координата для самой верхней платформ
-
-        for (i in 0 until numberOfPlatforms) {
-            val color = Color.YELLOW // Все платформы желтые
-            val platformY = platformStartY + i * (platformHeight + platformSpacing) // Позиция по оси Y
-
-            // Создаем платформу и добавляем в список
-            platforms.add(Platform(fullWidth / 2f, platformY, platformWidth, platformHeight, color))
-        }
-    }
-
-    // Рисуем 3D платформу
-    private fun draw3DPlatform(canvas: Canvas, platform: Platform, index: Int) {
-        val platformDepth = 30f // Глубина для эффекта 3D
-
-        // Координаты верхнего прямоугольника (верхняя плоскость)
-        val topLeftX = platform.x - platform.width / 2
-        val topRightX = platform.x + platform.width / 2
-        val topY = platform.y
-
-        // Координаты нижнего прямоугольника (нижняя плоскость с отступом для глубины)
-        val bottomLeftX = topLeftX + platformDepth
-        val bottomRightX = topRightX + platformDepth
-        val bottomY = platform.y + platform.height + platformDepth
-
-        // Создаем верхний прямоугольник
-        val topRect = Path().apply {
-            moveTo(topLeftX, topY)
-            lineTo(topRightX, topY)
-            lineTo(topRightX, platform.y + platform.height)
-            lineTo(topLeftX, platform.y + platform.height)
-            close()
-        }
-
-        // Создаем нижний прямоугольник
-        val bottomRect = Path().apply {
-            moveTo(bottomLeftX, bottomY)
-            lineTo(bottomRightX, bottomY)
-            lineTo(bottomRightX, platform.y + platform.height)
-            lineTo(bottomLeftX, platform.y + platform.height)
-            close()
-        }
-
-        // Боковые грани
-        val sideRect = Path().apply {
-            moveTo(topLeftX, topY)
-            lineTo(topLeftX, platform.y + platform.height)
-            lineTo(bottomLeftX, platform.y + platform.height + platformDepth)
-            lineTo(bottomLeftX, bottomY)
-            close()
-        }
-
-        // Задняя грань
-        val backRect = Path().apply {
-            moveTo(topRightX, topY)
-            lineTo(topRightX, platform.y + platform.height)
-            lineTo(bottomRightX, platform.y + platform.height + platformDepth)
-            lineTo(bottomRightX, bottomY)
-            close()
-        }
-
-        // Задаем цвета для верхней и боковой частей платформы
-        val topPaint = Paint().apply { color = Color.rgb(150, 150, 255) }
-        val sidePaint = Paint().apply { color = Color.rgb(100, 100, 200) }
-
-        // Рисуем верхнюю часть
-        canvas.drawPath(topRect, topPaint)
-
-        // Рисуем боковые части
-        canvas.drawPath(sideRect, sidePaint)
-        canvas.drawPath(backRect, sidePaint)
-
-        // === ЧЕРНЫЙ СЕГМЕНТ ЗМЕЙКОЙ ===
-        val blackSegmentWidth = platform.width * 0.25f // Ширина черного сегмента
-
-        // Расчет позиции черного сегмента с учетом "змейки"
-        val direction = if (index % 2 == 0) 1 else -1 // Направление для "змейки"
-        blackAreaPosition += blackAreaDirection * direction * 5 // Изменяем позицию черного сегмента
-
-        // Ограничиваем движение черного сегмента внутри платформы
-        val clampedPosition = blackAreaPosition.coerceIn(0f, platform.width - blackSegmentWidth)
-
-        // Добавляем черную движущуюся область
-        val blackAreaRect = RectF(
-            platform.x - platform.width / 2 + clampedPosition,
-            platform.y,
-            platform.x - platform.width / 2 + clampedPosition + blackSegmentWidth,
-            platform.y + platform.height
-        )
-        canvas.drawRect(blackAreaRect, blackPaint)
-    }
-
-    // Рисуем полоску прогресса уровня
-    private fun drawLevelProgressBar(canvas: Canvas) {
-        val progressBarHeight = 20f
-        val progressBarY = 0f
-        val progressBarWidth = width.toFloat() * 0.8f // 80% ширины экрана
-
-        val progressBarRect = RectF(
-            (width - progressBarWidth) / 2,
-            progressBarY,
-            (width + progressBarWidth) / 2,
-            progressBarY + progressBarHeight
-        )
-
-        val progressPaint = Paint().apply {
-            color = Color.GREEN
-        }
-
-        // Рисуем полоску уровня
-        canvas.drawRect(progressBarRect, progressPaint)
-    }
-}
-
-// Класс для платформы
-data class Platform(
-    val x: Float,
-    val y: Float,
-    val width: Float,
-    val height: Float,
-    val color: Int
-)
-
-class GameView {
-
+    // Класс для платформ
+    data class Platform(val x: Float, val y: Float, val width: Float, val height: Float, val color: Int, val isBlack: Boolean)
 }
