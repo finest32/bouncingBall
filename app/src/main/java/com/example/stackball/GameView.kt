@@ -376,5 +376,11 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
         return super.onTouchEvent(event)
     }
 
-    data class Platform(val x: Float, val y: Float, val width: Float, val height: Float, var color: Int, val isBlack: Boolean, var isBreakable: Boolean)
+    data class Platform(val x: Float,
+                        val y: Float,
+                        val width: Float,
+                        val height: Float,
+                        var color: Int,
+                        val isBlack: Boolean,
+                        var isBreakable: Boolean)
 }
