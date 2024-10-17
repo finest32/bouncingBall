@@ -16,7 +16,7 @@ class SplashScreenActivity : AppCompatActivity() {
 
         // Инициализация ImageView
         val imageView: ImageView = findViewById(R.id.splashImage)
-        imageView.setImageBitmap(BitmapFactory.decodeResource(resources, R.drawable.b_b))
+        imageView.setImageBitmap(BitmapFactory.decodeResource(resources, R.drawable.logo32))
 
         // Скрываем логотип при запуске
         imageView.visibility = ImageView.INVISIBLE
