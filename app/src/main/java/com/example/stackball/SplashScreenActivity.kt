@@ -4,11 +4,10 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 import android.widget.ImageView
 import com.example.bouncingball.R
-import com.example.bouncingball.GameView
-import com.google.androidgamesdk.GameActivity
 
 class SplashScreenActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,13 +16,21 @@ class SplashScreenActivity : AppCompatActivity() {
 
         // Инициализация ImageView
         val imageView: ImageView = findViewById(R.id.splashImage)
-        imageView.setImageBitmap(BitmapFactory.decodeResource(resources, R.drawable.logo32))
+        imageView.setImageBitmap(BitmapFactory.decodeResource(resources, R.drawable.b_b))
 
-        // Задержка в 3 секунды
-        Handler().postDelayed({
-            val intent = Intent(this, GameView::class.java)
+        // Скрываем логотип при запуске
+        imageView.visibility = ImageView.INVISIBLE
+
+        // Показываем логотип через 2 секунды
+        Handler(Looper.getMainLooper()).postDelayed({
+            imageView.visibility = ImageView.VISIBLE
+        }, 1000) // 1000 миллисекунд
+
+        // Задержка перед переходом на другой экран
+        Handler(Looper.getMainLooper()).postDelayed({
+            val intent = Intent(this, com.example.bouncingball.GameActivity::class.java)
             startActivity(intent)
             finish() // Закрыть экран загрузки
-        }, 3000) // 3000 миллисекунд = 3 секунды
+        }, 5000) // 5000 миллисекунд
     }
 }

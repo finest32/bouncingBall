@@ -1,21 +1,26 @@
-<manifest xmlns:tools="http://schemas.android.com/tools"
-    xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.bouncingball">
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ico_ball"
         android:label="Bouncing Ball"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
-        tools:ignore="ExtraText">
+        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"> <!-- Указываем явно android:exported -->
+        <!-- Укажите полный путь к SplashScreenActivity -->
+        <activity android:name="com.example.bouncingball.SplashScreenActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Замените на GameActivity, который наследуется от Activity -->
+        <activity android:name="com.example.bouncingball.GameActivity" />
+
     </application>
+
 </manifest>
