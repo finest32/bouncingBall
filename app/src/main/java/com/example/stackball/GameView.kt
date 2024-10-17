@@ -74,14 +74,16 @@ class GameView(context: Context, attrs: AttributeSet? = null) : SurfaceView(cont
     }
 
     private fun setupBallPaint() {
+        // Изменяем градиент для создания ярко-красного цвета
         val gradient = RadialGradient(
             ballRadius, ballRadius, ballRadius,
-            Color.parseColor("#FF0000"),
-            Color.parseColor("#FF7F7F"),
+            Color.parseColor("#FF0000"), // Яркий красный
+            Color.parseColor("#FF4040"), // Более светлый красный
             Shader.TileMode.CLAMP
         )
         ballPaint.shader = gradient
     }
+
 
     private fun setupShadowPaint() {
         ballShadowPaint.color = Color.parseColor("#80000000")

@@ -8,7 +8,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
         tools:ignore="ExtraText">
-        
+
         <activity
             android:name=".MainActivity"
             android:exported="true"> <!-- Указываем явно android:exported -->
