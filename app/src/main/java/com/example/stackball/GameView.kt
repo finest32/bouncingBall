@@ -1,4 +1,4 @@
-package com.example.stackball
+package com.example.bouncingball
 
 import android.content.Context
 import android.graphics.*

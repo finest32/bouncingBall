@@ -2,7 +2,7 @@ package com.example.bouncingball
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import com.example.stackball.GameView
+import com.example.bouncingball.GameView
 
 class MainActivity : AppCompatActivity() {
 
